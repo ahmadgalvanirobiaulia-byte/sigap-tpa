@@ -1,0 +1,38 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Streamlit secrets and credentials
+.streamlit/secrets.toml
+.streamlit/credentials.toml
+app/.streamlit/secrets.toml
+app/.streamlit/credentials.toml
+
+# Logs & temporary files
+*.log
+streamlit.log
+
+# Caches
+.cache/
+data/cache/
+app/data/cache/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Archives / backups
+*.zip
+*.tar.gz
