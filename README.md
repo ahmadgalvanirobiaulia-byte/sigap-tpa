@@ -55,7 +55,3 @@ for nama, info in TPA.items():
 ModelTimbunan().latih(data).simpan()
 ```
 
-## Catatan
-
-Sistem ini merupakan prototipe penelitian. Keluarannya berupa tingkat bahaya, bukan
-prediksi kepastian terjadinya kebakaran, dan belum dapat menggantikan pemantauan lapangan.
