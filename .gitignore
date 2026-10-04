@@ -36,3 +36,5 @@ Thumbs.db
 # Archives / backups
 *.zip
 *.tar.gz
+.vercel
+.env*
