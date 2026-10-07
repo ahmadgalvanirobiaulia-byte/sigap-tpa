@@ -21,15 +21,17 @@ MIN_BACAAN = 20  # Jumlah minimum pembacaan valid untuk data sensor asli
 
 # ----------------------------------------------------------------- Konfigurasi Firebase
 def _firebase_config():
-    """Ambil konfigurasi Firebase dari secrets atau environment."""
+    """Ambil konfigurasi Firebase dari secrets, environment, atau default."""
+    default_url = "https://sigap-tpa-default-rtdb.asia-southeast1.firebasedatabase.app"
+    default_path = "sigap/Sarimukti/history"
     try:
         fb = st.secrets["FIREBASE"]
-        return fb.get("database_url", ""), fb.get("sensor_path", "sigap/Sarimukti/history")
+        return fb.get("database_url", default_url), fb.get("sensor_path", default_path)
     except Exception:
         import os
         return (
-            os.environ.get("FIREBASE_DATABASE_URL", ""),
-            os.environ.get("FIREBASE_SENSOR_PATH", "sigap/Sarimukti/history"),
+            os.environ.get("FIREBASE_DATABASE_URL", default_url),
+            os.environ.get("FIREBASE_SENSOR_PATH", default_path),
         )
 
 
