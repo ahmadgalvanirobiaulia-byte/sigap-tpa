@@ -169,12 +169,8 @@ else:
         )
 
         with c2:
-        with st.container():
-            st.markdown("**Kategori**")
-            # Memotong teks di tanda strip (-) dan hanya mengambil kata depannya saja
-            kategori_bersih = str(data_sensor["kategori_metana"]).split(" - ")[0]
-            st.write(kategori_bersih)
-
+        st.metric("Kategori", str(data_sensor["kategori_metana"]).split(" - ")[0])
+            
     with c3:
         st.metric(
             "Suhu",
