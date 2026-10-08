@@ -548,11 +548,12 @@ with tab4:
 
         st.divider()
 
-         # ----- E. Tabel 7 hari terakhir -----
+                 # ----- E. Tabel 7 hari terakhir -----
         st.markdown("**Data 7 hari terakhir**")
+        
+        # Penyiapan dataframe dengan ekspresi datar rata kiri 8 spasi
         tujuh_hari = harian_sensor.sort_values("tanggal", ascending=False).head(7).copy()
         
-        # Format kolom langsung dalam satu baris ekspresi datar
         tujuh_hari["Tanggal"] = tujuh_hari["tanggal"].dt.strftime("%d-%m-%Y")
         tujuh_hari["Suhu rata-rata (°C)"] = tujuh_hari["suhu_rata"].map("{:.1f}".format)
         tujuh_hari["Suhu maksimum (°C)"] = tujuh_hari["suhu_maks"].map("{:.1f}".format)
@@ -562,10 +563,17 @@ with tab4:
         tujuh_hari["Jumlah pembacaan"] = tujuh_hari["n_bacaan"].astype(int)
         tujuh_hari["Status metana"] = tujuh_hari["metana_kelas"].str.capitalize()
         
-        # Pilih kolom yang mau ditampilkan saja
-        kolom_pilihan = ["Tanggal", "Suhu rata-rata (°C)", "Suhu maksimum (°C)", "Kelembapan rata-rata (%)", "Metana rata-rata (ppm)", "Metana maksimum (ppm)", "Jumlah pembacaan", "Status metana"]
+        kolom_pilihan = [
+            "Tanggal", "Suhu rata-rata (°C)", "Suhu maksimum (°C)", 
+            "Kelembapan rata-rata (%)", "Metana rata-rata (ppm)", 
+            "Metana maksimum (ppm)", "Jumlah pembacaan", "Status metana"
+        ]
         
-        # Tampilkan langsung ke Streamlit tanpa fungsi styling yang rawan salah spasi
         st.dataframe(tujuh_hari[kolom_pilihan], hide_index=True, use_container_width=True)
+        
+        st.divider()
+        
+        if landsat is None:
+            st.warning("Citra Landsat untuk TPA ini belum tersedia, sehingga bagian kondisi termal dari satelit belum memakai pengamatan langsung.")
 
         st.divider()
