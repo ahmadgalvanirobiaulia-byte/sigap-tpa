@@ -548,28 +548,97 @@ with tab4:
 
         st.divider()
 
-         # ----- E. Tabel 7 hari terakhir -----
+                # ----- E. Tabel 7 hari terakhir -----
         st.markdown("**Data 7 hari terakhir**")
-        
         tujuh_hari = harian_sensor.sort_values("tanggal", ascending=False).head(7).copy()
-        
-        # Format kolom langsung dalam ekspresi datar (Semua diawali 8 spasi dari kiri)
-        tujuh_hari["Tanggal"] = tujuh_hari["tanggal"].dt.strftime("%d-%m-%Y")
-        tujuh_hari["Suhu rata-rata (°C)"] = tujuh_hari["suhu_rata"].map("{:.1f}".format)
-        tujuh_hari["Suhu maksimum (°C)"] = tujuh_hari["suhu_maks"].map("{:.1f}".format)
-        tujuh_hari["Kelembapan rata-rata (%)"] = tujuh_hari["kelembapan_rata"].map("{:.1f}".format)
-        tujuh_hari["Metana rata-rata (ppm)"] = tujuh_hari["metana_rata_ppm"].round(0).astype(int)
-        tujuh_hari["Metana maksimum (ppm)"] = tujuh_hari["metana_maks_ppm"].round(0).astype(int)
-        tujuh_hari["Jumlah pembacaan"] = tujuh_hari["n_bacaan"].astype(int)
-        tujuh_hari["Status metana"] = tujuh_hari["metana_kelas"].str.capitalize()
-        
-        kolom_pilihan = [
-            "Tanggal", "Suhu rata-rata (°C)", "Suhu maksimum (°C)", 
-            "Kelembapan rata-rata (%)", "Metana rata-rata (ppm)", 
-            "Metana maksimum (ppm)", "Jumlah pembacaan", "Status metana"
-        ]
-        
-        # Tampilkan langsung ke Streamlit secara aman
-        st.dataframe(tujuh_hari[kolom_pilihan], hide_index=True, use_container_width=True)
+        tabel = pd.DataFrame({
+            "Tanggal": tujuh_hari["tanggal"].dt.strftime("%d %b %Y"),
+            "Suhu rata-rata (°C)": tujuh_hari["suhu_rata"].round(1),
+            "Suhu maksimum (°C)": tujuh_hari["suhu_maks"].round(1),
+            "Kelembapan rata-rata (%)": tujuh_hari["kelembapan_rata"].round(1),
+            "Metana rata-rata (ppm)": tujuh_hari["metana_rata_ppm"].round(0).astype(int),
+            "Metana maksimum (ppm)": tujuh_hari["metana_maks_ppm"].round(0).astype(int),
+            "Jumlah pembacaan": tujuh_hari["n_bacaan"].astype(int),
+            "Status metana": tujuh_hari["metana_kelas"].str.capitalize(),
+        }).reset_index(drop=True)
+
+        kelas_list = tujuh_hari["metana_kelas"].tolist()
+
+        def warnai_metana(kolom):
+            return [
+                f"color: {WARNA_KELAS.get(k, TINTA_2)}; font-weight: 600"
+                for k in kelas_list
+            ]
+
+        gaya_tabel = tabel.style.apply(warnai_metana, subset=["Status metana"])
+        st.dataframe(gaya_tabel, hide_index=True, use_container_width=True,
+                     height=38 + 35 * len(tabel))
 
         st.divider()
+
+        st.markdown("**Perbandingan data sensor dengan model IRKT**")
+        perbandingan = iot.bandingkan_dengan_model(harian_sensor, d)
+
+        if perbandingan.empty:
+            st.info("Belum terdapat tanggal yang sama antara data sensor dan periode model.")
+        else:
+            rata_suhu = perbandingan["suhu_rata"].mean()
+            perbandingan["suhu_anomali"] = perbandingan["suhu_rata"] - rata_suhu
+
+            rata_z = perbandingan["z_prediksi"].mean()
+            std_z = perbandingan["z_prediksi"].std()
+            std_suhu = perbandingan["suhu_anomali"].std()
+
+            if std_z > 0 and std_suhu > 0:
+                perbandingan["z_pred_norm"] = (
+                    (perbandingan["z_prediksi"] - rata_z) / std_z * std_suhu
+                )
+            else:
+                perbandingan["z_pred_norm"] = perbandingan["z_prediksi"] - rata_z
+
+            df_vis = perbandingan[["tanggal", "suhu_anomali", "z_pred_norm"]].melt(
+                id_vars="tanggal",
+                var_name="seri",
+                value_name="nilai",
+            )
+            df_vis["Seri"] = df_vis["seri"].map({
+                "suhu_anomali": "Anomali suhu sensor (°C)",
+                "z_pred_norm": "z prediksi model (dinormalisasi)",
+            })
+
+            grafik_banding = (
+                alt.Chart(df_vis)
+                .mark_line(strokeWidth=2)
+                .encode(
+                    x=alt.X("tanggal:T", title=None,
+                            axis=alt.Axis(labelAngle=0, grid=False, labelColor=TINTA_2)),
+                    y=alt.Y("nilai:Q", title="Nilai (dinormalisasi)",
+                            axis=alt.Axis(gridColor="#EEF2F6", labelColor=TINTA_2,
+                                          titleColor=TINTA)),
+                    color=alt.Color("Seri:N",
+                                    scale=alt.Scale(
+                                        domain=["Anomali suhu sensor (°C)",
+                                                "z prediksi model (dinormalisasi)"],
+                                        range=["#1B4965", "#9C6ADE"]),
+                                    legend=alt.Legend(orient="bottom", title=None,
+                                                      labelFontSize=13)),
+                    tooltip=[
+                        alt.Tooltip("tanggal:T", title="Tanggal", format="%d %b %Y"),
+                        alt.Tooltip("Seri:N", title="Seri"),
+                        alt.Tooltip("nilai:Q", title="Nilai", format=".2f"),
+                    ],
+                )
+                .properties(height=300)
+                .configure_view(stroke=None)
+            )
+            st.altair_chart(grafik_banding, use_container_width=True,
+                            key="grafik_banding_sensor_model")
+
+            st.caption(
+                "Grafik ini digunakan untuk melihat pola pergerakan data sensor dan prediksi "
+                "model pada tanggal yang sama. Kesamaan arah tidak berarti sensor menjadi "
+                "variabel langsung dalam perhitungan IRKT."
+            )
+            
+if landsat is None:
+    st.warning("Citra Landsat untuk TPA ini belum tersedia, sehingga bagian kondisi termal dari satelit belum memakai pengamatan langsung.")
