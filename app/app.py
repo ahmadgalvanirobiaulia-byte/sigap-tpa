@@ -1,15 +1,19 @@
 """SIGAP-TPA: dasbor prakiraan bahaya kebakaran TPA (Streamlit)."""
+# TAMBAHKAN BLOK INI DI SINI
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import iot
+# Kode import Anda selanjutnya tetap di bawahnya...
 import datetime as dt
 import numpy as np
-import pandas as pd
-import streamlit as st
+import pandas as pd, streamlit as st
 from sigap import weather, satellite, index as idx, sensor
 from pathlib import Path
 from sigap.config import TPA, AKSI, DATA_DIR
 from sigap.model import ModelTimbunan
 from sigap.alert import pesan
 import ui_components as ui
-import iot
 
 # ----------------------------------------------------------------- Konstanta IoT
 # Nilai sementara.
@@ -544,12 +548,12 @@ with tab4:
 
         st.divider()
 
-                 # ----- E. Tabel 7 hari terakhir -----
+         # ----- E. Tabel 7 hari terakhir -----
         st.markdown("**Data 7 hari terakhir**")
         
-        # Penyiapan dataframe dengan ekspresi datar rata kiri 8 spasi
         tujuh_hari = harian_sensor.sort_values("tanggal", ascending=False).head(7).copy()
         
+        # Format kolom langsung dalam ekspresi datar (Semua diawali 8 spasi dari kiri)
         tujuh_hari["Tanggal"] = tujuh_hari["tanggal"].dt.strftime("%d-%m-%Y")
         tujuh_hari["Suhu rata-rata (°C)"] = tujuh_hari["suhu_rata"].map("{:.1f}".format)
         tujuh_hari["Suhu maksimum (°C)"] = tujuh_hari["suhu_maks"].map("{:.1f}".format)
@@ -565,11 +569,7 @@ with tab4:
             "Metana maksimum (ppm)", "Jumlah pembacaan", "Status metana"
         ]
         
+        # Tampilkan langsung ke Streamlit secara aman
         st.dataframe(tujuh_hari[kolom_pilihan], hide_index=True, use_container_width=True)
-        
-        st.divider()
-        
-        if landsat is None:
-            st.warning("Citra Landsat untuk TPA ini belum tersedia, sehingga bagian kondisi termal dari satelit belum memakai pengamatan langsung.")
 
         st.divider()
