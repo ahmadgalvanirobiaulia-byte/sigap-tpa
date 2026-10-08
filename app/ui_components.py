@@ -64,20 +64,25 @@ def angka(x, desimal: int = 0) -> str:
 # ----------------------------------------------------------------- gaya halaman
 CSS = f"""
 <style>
-.block-container {{padding-top: 2.2rem; padding-bottom: 3rem; max-width: 1240px;}}
-.sg-header {{display: flex; align-items: flex-end; justify-content: space-between; gap: 24px;
-  flex-wrap: wrap; margin-bottom: 40px;}}
-.sg-header .kiri {{display: flex; gap: 14px; align-items: center; flex: 1 1 520px; min-width: 0;}}
-.sg-mono {{width: 40px; height: 40px; border-radius: 3px; background: {TINTA}; color: #fff;
-  display: flex; align-items: center; justify-content: center; font-weight: 600;
-  font-size: 14px; letter-spacing: .5px; flex: none;}}
-.sg-nama {{font-size: 22px; font-weight: 600; color: {TINTA}; line-height: 1.15; letter-spacing: .2px;}}
-.sg-nama span {{font-weight: 400; color: {TINTA_2};}}
-.sg-desk {{font-size: 13px; color: {TINTA_2}; margin-top: 3px;}}
+.block-container {{padding-top: 4.5rem; padding-bottom: 3rem; max-width: 1240px;}}
+.sg-header {{display: flex; align-items: flex-start; justify-content: space-between; gap: 20px;
+  flex-wrap: wrap; margin-bottom: 32px; width: 100%;}}
+.sg-header .kiri {{display: flex; gap: 16px; align-items: flex-start; flex: 1 1 500px; min-width: 0;}}
+.sg-mono {{width: 42px; height: 42px; border-radius: 6px; background: {TINTA}; color: #fff;
+  display: flex; align-items: center; justify-content: center; font-weight: 700;
+  font-size: 15px; letter-spacing: .5px; flex: none; margin-top: 2px;}}
+.sg-nama {{font-size: 24px; font-weight: 700; color: {TINTA}; line-height: 1.2; letter-spacing: .2px; word-wrap: break-word; overflow-wrap: break-word;}}
+.sg-kepanjangan {{font-size: 15px; font-weight: 500; color: {TINTA_2}; line-height: 1.35; margin-top: 3px; word-wrap: break-word; overflow-wrap: break-word;}}
+.sg-desk {{font-size: 13px; color: {TINTA_3}; margin-top: 6px; line-height: 1.4; word-wrap: break-word; overflow-wrap: break-word;}}
 .sg-tgl {{text-align: right; font-size: 12px; color: {TINTA_3}; text-transform: uppercase;
-  letter-spacing: .8px; flex: none;}}
+  letter-spacing: .8px; flex: none; padding-top: 4px;}}
 .sg-tgl b {{display: block; font-size: 15px; color: {TINTA}; font-weight: 600;
   text-transform: none; letter-spacing: 0; margin-top: 2px;}}
+@media (max-width: 768px) {{
+  .block-container {{padding-top: 5rem;}}
+  .sg-header {{flex-direction: column; align-items: flex-start; gap: 12px;}}
+  .sg-tgl {{text-align: left; padding-top: 0;}}
+}}
 
 .sg-lbl {{font-size: 12px; font-weight: 600; color: {TINTA_3}; text-transform: uppercase; letter-spacing: 1px;}}
 
@@ -170,7 +175,8 @@ def header(tanggal):
       <div class="kiri">
         <div class="sg-mono">ST</div>
         <div>
-          <div class="sg-nama">SIGAP-TPA <span>Sistem Informasi Geospasial Antisipasi Api TPA</span></div>
+          <div class="sg-nama">SIGAP-TPA</div>
+          <div class="sg-kepanjangan">Sistem Informasi Geospasial Antisipasi Api TPA</div>
           <div class="sg-desk">Prakiraan tingkat bahaya kebakaran timbunan sampah 15 hari ke depan.
             Sumber data: Landsat 8/9, MODIS, Open-Meteo.</div>
         </div>
