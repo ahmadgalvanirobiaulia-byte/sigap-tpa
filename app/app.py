@@ -104,9 +104,14 @@ def buat_data_demo_dari_sarimukti(
 
     n_bacaan = 288  # Asumsi pembacaan setiap 5 menit
 
-    rows = []
-    for _, baris in fitur.iterrows():
-        tanggal = baris["tanggal"]
+        rows = []
+    # Membuat acuan tanggal agar baris terakhir tepat di hari ini
+    hari_ini = pd.Timestamp.today().normalize()
+    total_data = len(fitur)
+    
+    for i, (_, baris) in enumerate(fitur.iterrows()):
+        # Menghitung tanggal agar berurutan pas sampai hari ini
+        tanggal_pas = hari_ini - pd.Timedelta(days=(total_data - 1 - i))
         tmax = baris["tmax"]
         rhmin = baris.get("rhmin", 70.0)
         kbdi_n = baris.get("kbdi_n", 0.3)
@@ -124,8 +129,8 @@ def buat_data_demo_dari_sarimukti(
         metana_rata = metana_dasar + rng.uniform(-50, 50)
         metana_maks = metana_rata + rng.uniform(50, 300)
 
-        rows.append({
-            "tanggal": pd.Timestamp(tanggal).normalize(),
+                rows.append({
+            "tanggal": tanggal_pas,
             "suhu_rata": round(suhu_rata, 1),
             "suhu_maks": round(suhu_maks, 1),
             "kelembapan_rata": round(kelembapan_rata, 1),
@@ -547,10 +552,10 @@ with tab4:
         st.markdown("**Data 7 hari terakhir**")
         tujuh_hari = harian_sensor.sort_values("tanggal", ascending=False).head(7).copy()
         tabel = pd.DataFrame({
-            "Tanggal": tujuh_hari["tanggal"].dt.strftime("%d %b %Y"),
-            "Suhu rata-rata (°C)": tujuh_hari["suhu_rata"].round(1),
-            "Suhu maksimum (°C)": tujuh_hari["suhu_maks"].round(1),
-            "Kelembapan rata-rata (%)": tujuh_hari["kelembapan_rata"].round(1),
+            "Tanggal": tujuh_hari["tanggal"].dt.strftime("%d-%m-%Y"),
+            "Suhu rata-rata (°C)": tujuh_hari["suhu_rata"].map("{:.1f}".format),
+            "Suhu maksimum (°C)": tujuh_hari["suhu_maks"].map("{:.1f}".format),
+            "Kelembapan rata-rata (%)": tujuh_hari["kelembapan_rata"].map("{:.1f}".format),
             "Metana rata-rata (ppm)": tujuh_hari["metana_rata_ppm"].round(0).astype(int),
             "Metana maksimum (ppm)": tujuh_hari["metana_maks_ppm"].round(0).astype(int),
             "Jumlah pembacaan": tujuh_hari["n_bacaan"].astype(int),
