@@ -162,10 +162,10 @@ if data_sensor is None:
 else:
     c1, c2, c3, c4 = st.columns(4)
 
-    with c1:
+        with c1:
         st.metric(
             "Metana",
-            f"{data_sensor['methane_ppm']:.2f} ppm"
+            f"{data_sensor['methane_ppm']:.0f} ppm"
         )
 
     with c2:
