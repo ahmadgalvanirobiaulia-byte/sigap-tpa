@@ -548,7 +548,7 @@ with tab4:
 
         st.divider()
 
-        # ----- E. Tabel 7 hari terakhir -----
+                # ----- E. Tabel 7 hari terakhir -----
         st.markdown("**Data 7 hari terakhir**")
         tujuh_hari = harian_sensor.sort_values("tanggal", ascending=False).head(7).copy()
         tabel = pd.DataFrame({
