@@ -168,10 +168,20 @@ else:
             f"{data_sensor['methane_ppm']:.0f} ppm"
         )
 
-    with c2:
-        st.metric(
-            "Kategori",
-            data_sensor["kategori_metana"]
+            with c2:
+        # Ambil nilai kategori (diubah ke huruf kecil untuk mencocokkan key WARNA_KELAS)
+        kat = str(data_sensor["kategori_metana"]).lower()
+        
+        # Ambil warna berdasarkan kategori, jika tidak cocok gunakan tinta abu-abu standar
+        warna_kat = WARNA_KELAS.get(kat, "#52606D")
+        
+        # Tampilkan menggunakan HTML kustom agar teks membungkus (wrap) otomatis dan berwarna
+        st.markdown(
+            f'<div style="font-size:14px; color:#52606D; margin-bottom:4px; font-family:sans-serif;">Kategori</div>'
+            f'<div style="font-size:22px; font-weight:700; color:{warna_kat}; '
+            f'line-height:1.2; text-transform:uppercase; font-family:sans-serif;">'
+            f'{data_sensor["kategori_metana"]}</div>',
+            unsafe_allow_html=True
         )
 
     with c3:
