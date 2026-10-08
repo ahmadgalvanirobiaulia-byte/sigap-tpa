@@ -226,8 +226,6 @@ if landsat is None:
                "satelit belum memakai pengamatan langsung. Potensi kebakaran tetap dapat dibaca, namun kurang peka.")
 
 ui.kartu_status(kini, ambang, depan, nama, info["wilayah"], AKSI[kini.level])
-st.markdown("### Indikator Lapangan Pendukung")
-st.markdown("### Interpretasi IRKT dan Indikator Lapangan")
 
 if data_sensor is not None:
     irkt_level = str(kini.level)
@@ -267,26 +265,8 @@ if data_sensor is not None:
             "dua informasi pendukung yang dibaca secara bersamaan."
         )
 
-    st.info(
-        f"**IRKT:** {irkt_level}  |  "
-        f"**Metana:** {metana_level}\n\n"
-        f"{interpretasi}"
-    )
 else:
     st.warning("Interpretasi belum tersedia karena data sensor belum tersedia.")
-
-if data_sensor is not None:
-    st.info(
-        f"Sensor MQ-4 mencatat konsentrasi metana "
-        f"**{data_sensor['methane_ppm']:.2f} ppm** "
-        f"dengan kategori **{data_sensor['kategori_metana']}**. "
-        f"Data ini digunakan sebagai informasi kondisi lapangan "
-        f"pendukung pembacaan tingkat risiko kebakaran TPA."
-    )
-else:
-    st.warning("Data sensor lapangan belum tersedia.")
-if data_sensor is not None:
-    st.markdown("**Perbandingan dengan tingkat risiko IRKT**")
 
     irkt_level = str(kini.level)
     metana_level = data_sensor["kategori_metana"]
