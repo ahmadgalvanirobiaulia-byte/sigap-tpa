@@ -407,15 +407,6 @@ with tab4:
         sumber_sensor = "Demo Sarimukti"
         n_total = 0
 
-    # ----- A. Banner status data -----
-    if pakai_demo:
-        st.warning(
-            "**DATA CONTOH**\n\n"
-            "Data ini diduplikasi dari data cuaca TPA Sarimukti. "
-            "Menunggu data sensor MQ-4 dan DHT22 sungguhan dari prototipe di lapangan.",
-            icon="⚠️",
-        )
-
     if harian_sensor.empty:
         st.info("Belum ada data sensor yang dapat ditampilkan.")
     else:
@@ -594,23 +585,6 @@ with tab4:
                      height=38 + 35 * len(tabel))
 
         st.divider()
-
-        # ----- F. Panel perbandingan dengan model IRKT -----
-        st.markdown("**Perbandingan data sensor dengan model IRKT**")
-
-        perbandingan = iot.bandingkan_dengan_model(harian_sensor, d)
-
-        if perbandingan.empty:
-            st.info("Belum terdapat tanggal yang sama antara data sensor dan periode model.")
-        else:
-            # Normalisasi suhu sensor: anomali terhadap rata-rata periode
-            rata_suhu = perbandingan["suhu_rata"].mean()
-            perbandingan["suhu_anomali"] = perbandingan["suhu_rata"] - rata_suhu
-
-            # Normalisasi z_prediksi ke skala serupa untuk perbandingan visual
-            rata_z = perbandingan["z_prediksi"].mean()
-            std_z = perbandingan["z_prediksi"].std()
-            std_suhu = perbandingan["suhu_anomali"].std()
 
             if std_z > 0 and std_suhu > 0:
                 perbandingan["z_pred_norm"] = (
