@@ -104,7 +104,7 @@ def buat_data_demo_dari_sarimukti(
 
     n_bacaan = 288  # Asumsi pembacaan setiap 5 menit
 
-        rows = []
+    rows = []
     # Membuat acuan tanggal agar baris terakhir tepat di hari ini
     hari_ini = pd.Timestamp.today().normalize()
     total_data = len(fitur)
@@ -129,7 +129,7 @@ def buat_data_demo_dari_sarimukti(
         metana_rata = metana_dasar + rng.uniform(-50, 50)
         metana_maks = metana_rata + rng.uniform(50, 300)
 
-                rows.append({
+        rows.append({
             "tanggal": tanggal_pas,
             "suhu_rata": round(suhu_rata, 1),
             "suhu_maks": round(suhu_maks, 1),
@@ -574,3 +574,6 @@ with tab4:
         st.dataframe(tujuh_hari[kolom_pilihan], hide_index=True, use_container_width=True)
 
         st.divider()
+# Perbaikan spasi paksa v2
+
+# Perbaikan spasi paksa v2
