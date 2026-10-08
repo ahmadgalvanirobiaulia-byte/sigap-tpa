@@ -162,7 +162,10 @@ with st.sidebar:
 ui.header(hari_ini)
 st.markdown("### Pemantauan Sensor Lapangan")
 
-# Tampilkan metrik sensor lapangan secara aman dan datar
+# 1. Pastikan baris data_sensor dicek dalam bentuk ekspresi datar (Semua diawali 0 spasi)
+if data_sensor is None:
+    st.warning("Data sensor belum tersedia.")
+
 if data_sensor is not None:
     c1, c2, c3, c4 = st.columns(4)
     kat_bersih = str(data_sensor["kategori_metana"]).split(" - ")[0]
@@ -170,6 +173,7 @@ if data_sensor is not None:
     c2.metric("Kategori", kat_bersih)
     c3.metric("Suhu", f"{data_sensor['suhu']:.1f} °C")
     c4.metric("Kelembapan", f"{data_sensor['rh']:.1f} %")
+
 else:
     st.warning("Data sensor belum tersedia.")
 
