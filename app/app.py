@@ -1,19 +1,15 @@
 """SIGAP-TPA: dasbor prakiraan bahaya kebakaran TPA (Streamlit)."""
-# TAMBAHKAN BLOK INI DI SINI
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-import iot
-# Kode import Anda selanjutnya tetap di bawahnya...
 import datetime as dt
 import numpy as np
-import pandas as pd, streamlit as st
+import pandas as pd
+import streamlit as st
 from sigap import weather, satellite, index as idx, sensor
 from pathlib import Path
 from sigap.config import TPA, AKSI, DATA_DIR
 from sigap.model import ModelTimbunan
 from sigap.alert import pesan
 import ui_components as ui
+import iot
 
 # ----------------------------------------------------------------- Konstanta IoT
 # Nilai sementara.
