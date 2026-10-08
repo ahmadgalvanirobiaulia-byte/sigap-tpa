@@ -168,14 +168,20 @@ else:
             f"{data_sensor['methane_ppm']:.0f} ppm"
         )
 
-            with c2:
-        # Ambil nilai kategori (diubah ke huruf kecil untuk mencocokkan key WARNA_KELAS)
+        with c2:
+        # 1. Definisikan warna lokal di sini agar tidak memicu NameError/IndentationError
+        WARNA_KAT_LOKAL = {
+            "rendah": "#2CA02C",
+            "sedang": "#F2C200",
+            "tinggi": "#FF7F0E",
+            "sangat tinggi": "#D62728",
+        }
+        
+        # 2. Ambil nilai kategori dan ubah ke huruf kecil
         kat = str(data_sensor["kategori_metana"]).lower()
+        warna_kat = WARNA_KAT_LOKAL.get(kat, "#52606D")
         
-        # Ambil warna berdasarkan kategori, jika tidak cocok gunakan tinta abu-abu standar
-        warna_kat = WARNA_KELAS.get(kat, "#52606D")
-        
-        # Tampilkan menggunakan HTML kustom agar teks membungkus (wrap) otomatis dan berwarna
+        # 3. Tampilkan dengan HTML kustom yang rapi
         st.markdown(
             f'<div style="font-size:14px; color:#52606D; margin-bottom:4px; font-family:sans-serif;">Kategori</div>'
             f'<div style="font-size:22px; font-weight:700; color:{warna_kat}; '
