@@ -548,32 +548,24 @@ with tab4:
 
         st.divider()
 
-                # ----- E. Tabel 7 hari terakhir -----
+         # ----- E. Tabel 7 hari terakhir -----
         st.markdown("**Data 7 hari terakhir**")
         tujuh_hari = harian_sensor.sort_values("tanggal", ascending=False).head(7).copy()
-
-# --- BLOK INI SENGAJA RATA KIRI TOTAL UNTUK MENGHINDARI INDENTATION ERROR ---
-df_tabel_baru = pd.DataFrame({
-    "Tanggal": tujuh_hari["tanggal"].dt.strftime("%d-%m-%Y"),
-    "Suhu rata-rata (°C)": tujuh_hari["suhu_rata"].map("{:.1f}".format),
-    "Suhu maksimum (°C)": tujuh_hari["suhu_maks"].map("{:.1f}".format),
-    "Kelembapan rata-rata (%)": tujuh_hari["kelembapan_rata"].map("{:.1f}".format),
-    "Metana rata-rata (ppm)": tujuh_hari["metana_rata_ppm"].round(0).astype(int),
-    "Metana maksimum (ppm)": tujuh_hari["metana_maks_ppm"].round(0).astype(int),
-    "Jumlah pembacaan": tujuh_hari["n_bacaan"].astype(int),
-    "Status metana": tujuh_hari["metana_kelas"].str.capitalize(),
-}).reset_index(drop=True)
-
-kelas_list_baru = tujuh_hari["metana_kelas"].tolist()
-
-def warnai_metana_baru(kolom):
-    return [f"color: {WARNA_KELAS.get(k, TINTA_2)}; font-weight: 600" for k in kelas_list_baru]
-
-gaya_tabel_baru = df_tabel_baru.style.apply(warnai_metana_baru, subset=["Status metana"])
-# ----------------------------------------------------------------------------
-
-        # Tampilkan ke aplikasi (kembali ke indentasi 8 spasi)
-        st.dataframe(gaya_tabel_baru, hide_index=True, use_container_width=True,
-                     height=38 + 35 * len(df_tabel_baru))
+        
+        # Format kolom langsung dalam satu baris ekspresi datar
+        tujuh_hari["Tanggal"] = tujuh_hari["tanggal"].dt.strftime("%d-%m-%Y")
+        tujuh_hari["Suhu rata-rata (°C)"] = tujuh_hari["suhu_rata"].map("{:.1f}".format)
+        tujuh_hari["Suhu maksimum (°C)"] = tujuh_hari["suhu_maks"].map("{:.1f}".format)
+        tujuh_hari["Kelembapan rata-rata (%)"] = tujuh_hari["kelembapan_rata"].map("{:.1f}".format)
+        tujuh_hari["Metana rata-rata (ppm)"] = tujuh_hari["metana_rata_ppm"].round(0).astype(int)
+        tujuh_hari["Metana maksimum (ppm)"] = tujuh_hari["metana_maks_ppm"].round(0).astype(int)
+        tujuh_hari["Jumlah pembacaan"] = tujuh_hari["n_bacaan"].astype(int)
+        tujuh_hari["Status metana"] = tujuh_hari["metana_kelas"].str.capitalize()
+        
+        # Pilih kolom yang mau ditampilkan saja
+        kolom_pilihan = ["Tanggal", "Suhu rata-rata (°C)", "Suhu maksimum (°C)", "Kelembapan rata-rata (%)", "Metana rata-rata (ppm)", "Metana maksimum (ppm)", "Jumlah pembacaan", "Status metana"]
+        
+        # Tampilkan langsung ke Streamlit tanpa fungsi styling yang rawan salah spasi
+        st.dataframe(tujuh_hari[kolom_pilihan], hide_index=True, use_container_width=True)
 
         st.divider()
