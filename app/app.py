@@ -168,11 +168,13 @@ else:
             f"{data_sensor['methane_ppm']:.0f} ppm"
         )
 
-    with c2:
+        with c2:
         with st.container():
             st.markdown("**Kategori**")
-            st.write(data_sensor["kategori_metana"])
-            
+            # Memotong teks di tanda strip (-) dan hanya mengambil kata depannya saja
+            kategori_bersih = str(data_sensor["kategori_metana"]).split(" - ")[0]
+            st.write(kategori_bersih)
+
     with c3:
         st.metric(
             "Suhu",
