@@ -14,12 +14,11 @@ R0 adalah resistansi sensor di udara bersih (referensi ~1 000 ppm CH4).
 Sebelum kalibrasi dengan gas referensi, gunakan nilai R0 sementara dan
 perlakukan hasil ppm sebagai indikasi tren, bukan angka presisi.
 
-Ambang klasifikasi metana
--------------------------
-Rendah        :     < 1 000 ppm
-Sedang        : 1 000 - < 5 000 ppm
-Tinggi        : 5 000 - < 15 000 ppm
-Sangat tinggi : >= 15 000 ppm
+Ambang indikator konsentrasi gas metana (MQ-4) berdasarkan jurnal ilmiah:
+--------------------------------------------------------------------------
+Aman    : < 500 ppm
+Waspada : 500 - 1 000 ppm
+Bahaya  : > 1 000 ppm (berisiko kebakaran dalam 8 jam)
 """
 from __future__ import annotations
 
@@ -32,8 +31,8 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 # ----------------------------------------------------------------- konstanta
-AMBANG_METANA = [1_000, 5_000, 15_000]
-LABEL_METANA = ["rendah", "sedang", "tinggi", "sangat tinggi"]
+AMBANG_METANA = [500, 1_000]
+LABEL_METANA = ["aman", "waspada", "bahaya"]
 
 # Mapping field Firebase -> kolom standar internal.
 # Struktur Firebase aktual:
@@ -49,14 +48,19 @@ _FIREBASE_MAP = {
 # ----------------------------------------------------------------- kalibrasi
 def _rs_kohm(v_adc: np.ndarray, vcc: float = 3.3, rl_kohm: float = 10.0) -> np.ndarray:
     """Hitung resistansi sensor (Rs) dalam kohm dari tegangan ADC."""
-    v = np.clip(np.asarray(v_adc, dtype=float), 1e-6, vcc - 1e-6)
+    v = np.clip(np.asarray(v_adc, dtype=float), 0.01, vcc * 0.98)
     return rl_kohm * (vcc - v) / v
 
 
 def _ppm(rs: np.ndarray, r0_kohm: float) -> np.ndarray:
-    """Konversi Rs/R0 ke estimasi ppm CH4 menggunakan kurva datasheet MQ-4."""
-    rasio = np.clip(rs / r0_kohm, 1e-6, None)
-    return 1012.7 * np.power(rasio, -2.786)
+    """Konversi Rs/R0 ke estimasi ppm CH4 menggunakan kurva datasheet MQ-4.
+    
+    Nilai dibatasi ke rentang fisis wajar MQ-4 (maks 20.000 ppm) agar tidak
+    menghasilkan nilai ekstrem saat sensor mengalami saturasi tegangan.
+    """
+    rasio = np.clip(rs / r0_kohm, 0.30, 10.0)
+    ppm = 1012.7 * np.power(rasio, -2.786)
+    return np.clip(ppm, 0.0, 20_000.0)
 
 
 # ----------------------------------------------------------------- klasifikasi
@@ -259,9 +263,13 @@ def ringkas_harian(log: pd.DataFrame) -> pd.DataFrame:
     log["tanggal"] = log["timestamp"].dt.normalize()
 
     agg = log.groupby("tanggal").agg(
+        suhu_min=("suhu_C", "min"),
         suhu_rata=("suhu_C", "mean"),
         suhu_maks=("suhu_C", "max"),
+        kelembapan_min=("kelembapan_persen", "min"),
         kelembapan_rata=("kelembapan_persen", "mean"),
+        kelembapan_maks=("kelembapan_persen", "max"),
+        metana_min_ppm=("metana_ppm", "min"),
         metana_rata_ppm=("metana_ppm", "mean"),
         metana_maks_ppm=("metana_ppm", "max"),
         n_bacaan=("suhu_C", "count"),

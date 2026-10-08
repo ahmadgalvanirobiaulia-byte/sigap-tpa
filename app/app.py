@@ -1,45 +1,41 @@
 """SIGAP-TPA: dasbor prakiraan bahaya kebakaran TPA (Streamlit)."""
-# TAMBAHKAN BLOK INI DI SINI
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-import iot
-# Kode import Anda selanjutnya tetap di bawahnya...
 import datetime as dt
 import numpy as np
 import pandas as pd, streamlit as st
-from sigap import weather, satellite, index as idx, sensor
 from pathlib import Path
 from sigap.config import TPA, AKSI, DATA_DIR
+from sigap import weather, satellite, index as idx, iot
 from sigap.model import ModelTimbunan
 from sigap.alert import pesan
 import ui_components as ui
 
-# ----------------------------------------------------------------- Konstanta IoT
-# Nilai sementara.
-# Ganti setelah kalibrasi MQ-4 dengan gas referensi
-# sesuai prosedur kalibrasi pada sigap/iot.py.
-R0_KOHM_SEMENTARA = 10.0
+st.set_page_config(page_title="SIGAP-TPA", page_icon="🔥", layout="wide")
 
-MIN_BACAAN = 20  # Jumlah minimum pembacaan valid untuk data sensor asli
-
-# ----------------------------------------------------------------- Konfigurasi Firebase
+# ----------------------------------------------------------------- Konfigurasi Firebase & IoT
 def _firebase_config():
     """Ambil konfigurasi Firebase dari secrets, environment, atau default."""
     default_url = "https://sigap-tpa-default-rtdb.asia-southeast1.firebasedatabase.app"
     default_path = "sigap/Sarimukti/history"
+    default_r0 = 10.0
     try:
         fb = st.secrets["FIREBASE"]
-        return fb.get("database_url", default_url), fb.get("sensor_path", default_path)
+        return (
+            fb.get("database_url", default_url),
+            fb.get("sensor_path", default_path),
+            float(fb.get("r0_kohm", default_r0)),
+        )
     except Exception:
         import os
         return (
             os.environ.get("FIREBASE_DATABASE_URL", default_url),
             os.environ.get("FIREBASE_SENSOR_PATH", default_path),
+            float(os.environ.get("FIREBASE_R0_KOHM", default_r0)),
         )
 
 
-FIREBASE_DATABASE_URL, FIREBASE_SENSOR_PATH = _firebase_config()
+FIREBASE_DATABASE_URL, FIREBASE_SENSOR_PATH, R0_KOHM_SEMENTARA = _firebase_config()
+
+MIN_BACAAN = 20  # Jumlah minimum pembacaan valid untuk data sensor asli
 
 
 class CuacaGagal(Exception):
@@ -73,9 +69,9 @@ def zonasi(nama: str):
 
 
 # ----------------------------------------------------------------- Cache Firebase
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=30, show_spinner=False)
 def ambil_sensor_firebase(database_url: str, sensor_path: str):
-    """Ambil data sensor Firebase dengan cache 60 detik."""
+    """Ambil data sensor Firebase dengan cache 30 detik."""
     return iot.muat_data_firebase(
         database_url=database_url,
         path=sensor_path,
@@ -105,35 +101,38 @@ def buat_data_demo_dari_sarimukti(
     n_bacaan = 288  # Asumsi pembacaan setiap 5 menit
 
     rows = []
-    # Membuat acuan tanggal agar baris terakhir tepat di hari ini
-    hari_ini = pd.Timestamp.today().normalize()
-    total_data = len(fitur)
-    
-    for i, (_, baris) in enumerate(fitur.iterrows()):
-        # Menghitung tanggal agar berurutan pas sampai hari ini
-        tanggal_pas = hari_ini - pd.Timedelta(days=(total_data - 1 - i))
+    for _, baris in fitur.iterrows():
+        tanggal = baris["tanggal"]
         tmax = baris["tmax"]
         rhmin = baris.get("rhmin", 70.0)
         kbdi_n = baris.get("kbdi_n", 0.3)
 
         # Suhu: tmax - 3 + noise ±0.5 °C
         suhu_rata = tmax - 3.0 + rng.uniform(-0.5, 0.5)
+        suhu_min = suhu_rata - rng.uniform(3.0, 5.0)
         suhu_maks = suhu_rata + rng.uniform(0.5, 2.0)
 
         # Kelembapan: rhmin + noise kecil, clamp 0-100
         kelembapan_rata = np.clip(rhmin + rng.uniform(-3.0, 3.0), 0, 100)
+        kelembapan_min = np.clip(kelembapan_rata - rng.uniform(5.0, 12.0), 0, 100)
+        kelembapan_maks = np.clip(kelembapan_rata + rng.uniform(5.0, 12.0), 0, 100)
 
         # Metana: berdasarkan kbdi_n, semakin kering semakin tinggi
         # Rentang dasar 400-2000 ppm, naik dengan kekeringan
         metana_dasar = 400 + 1600 * float(np.clip(kbdi_n, 0, 1))
         metana_rata = metana_dasar + rng.uniform(-50, 50)
+        metana_min = max(0.0, metana_rata - rng.uniform(100, 300))
         metana_maks = metana_rata + rng.uniform(50, 300)
 
         rows.append({
-            "tanggal": tanggal_pas,
+            "tanggal": pd.Timestamp(tanggal).normalize(),
+            "suhu_min": round(suhu_min, 1),
             "suhu_rata": round(suhu_rata, 1),
             "suhu_maks": round(suhu_maks, 1),
+            "kelembapan_min": round(kelembapan_min, 1),
             "kelembapan_rata": round(kelembapan_rata, 1),
+            "kelembapan_maks": round(kelembapan_maks, 1),
+            "metana_min_ppm": round(metana_min, 1),
             "metana_rata_ppm": round(metana_rata, 1),
             "metana_maks_ppm": round(metana_maks, 1),
             "n_bacaan": n_bacaan,
@@ -152,7 +151,6 @@ hari_ini = pd.Timestamp.today().normalize()
 with st.sidebar:
     st.markdown("### Pengaturan")
     nama = st.selectbox("Pilih TPA", list(TPA))
-    data_sensor = sensor.ambil_sensor_terbaru()
     hari_riwayat = st.slider("Panjang riwayat pada grafik (hari)", 30, 365, 90, 30)
     info = TPA[nama]
     st.divider()
@@ -160,22 +158,6 @@ with st.sidebar:
                 f"Koordinat: {info['lat']:.4f}, {info['lon']:.4f}")
 
 ui.header(hari_ini)
-st.markdown("### Pemantauan Sensor Lapangan")
-
-# 1. Pastikan baris data_sensor dicek dalam bentuk ekspresi datar (Semua diawali 0 spasi)
-if data_sensor is None:
-    st.warning("Data sensor belum tersedia.")
-
-if data_sensor is not None:
-    c1, c2, c3, c4 = st.columns(4)
-    kat_bersih = str(data_sensor["kategori_metana"]).split(" - ")[0]
-    c1.metric("Metana", f"{data_sensor['methane_ppm']:.0f} ppm")
-    c2.metric("Kategori", kat_bersih)
-    c3.metric("Suhu", f"{data_sensor['suhu']:.1f} °C")
-    c4.metric("Kelembapan", f"{data_sensor['rh']:.1f} %")
-
-else:
-    st.warning("Data sensor belum tersedia.")
 
 try:
     d, ambang, landsat, modis, waktu, fitur = siapkan(nama)
@@ -218,60 +200,6 @@ if landsat is None:
                "satelit belum memakai pengamatan langsung. Potensi kebakaran tetap dapat dibaca, namun kurang peka.")
 
 ui.kartu_status(kini, ambang, depan, nama, info["wilayah"], AKSI[kini.level])
-
-if data_sensor is not None:
-    irkt_level = str(kini.level)
-    metana_level = str(data_sensor["kategori_metana"])
-
-    if irkt_level == "HIJAU":
-        interpretasi = (
-            "Status IRKT berada pada tingkat HIJAU. "
-            "Indikator metana lapangan ditampilkan sebagai informasi "
-            "pendukung kondisi aktual saat pengukuran."
-        )
-
-    elif irkt_level == "KUNING":
-        interpretasi = (
-            "Status IRKT berada pada tingkat KUNING. "
-            "Indikator metana digunakan sebagai informasi tambahan "
-            "untuk membantu melihat kondisi lapangan saat pengukuran."
-        )
-
-    elif irkt_level == "ORANYE":
-        interpretasi = (
-            "Status IRKT berada pada tingkat ORANYE. "
-            "Indikator metana memberikan informasi kondisi lapangan "
-            "yang dapat dipertimbangkan bersama hasil model."
-        )
-
-    elif irkt_level == "MERAH":
-        interpretasi = (
-            "Status IRKT berada pada tingkat MERAH. "
-            "Indikator metana tetap digunakan sebagai informasi kondisi "
-            "lapangan dan tidak menggantikan hasil penilaian IRKT."
-        )
-
-    else:
-        interpretasi = (
-            "Status IRKT dan indikator metana ditampilkan sebagai "
-            "dua informasi pendukung yang dibaca secara bersamaan."
-        )
-
-else:
-    st.warning("Interpretasi belum tersedia karena data sensor belum tersedia.")
-
-    irkt_level = str(kini.level)
-    metana_level = data_sensor["kategori_metana"]
-
-    st.write(
-        f"**IRKT:** {irkt_level}  |  "
-        f"**Metana lapangan:** {metana_level}"
-    )
-
-    st.caption(
-        "Perbandingan ini bersifat informatif. Data metana tidak "
-        "mengubah nilai atau tingkat IRKT."
-    )
 ui.linimasa_15_hari(depan, hari_ini, ambang, ui.kalimat_kesimpulan(kini, depan, hari_ini))
 
 tab1, tab2, tab3, tab4 = st.tabs(["Prakiraan", "Komponen indeks", "Zonasi dalam TPA",
@@ -323,28 +251,25 @@ with tab3:
         ui.tabel_prioritas(zon)
 
 # ================================================================= TAB SENSOR IoT
-with tab4:
+@st.fragment(run_every=30)
+def render_sensor_iot(nama, fitur, d):
     import altair as alt
 
-    WARNA_RENDAH = "#2CA02C"
-    WARNA_SEDANG = "#F2C200"
-    WARNA_ORANYE = "#FF7F0E"
-    WARNA_MERAH = "#D62728"
+    WARNA_AMAN = "#2CA02C"
+    WARNA_WASPADA = "#F2C200"
+    WARNA_BAHAYA = "#D62728"
     TINTA = "#1F2933"
     TINTA_2 = "#52606D"
 
-    # Ambang metana dari modul iot (sumber kebenaran)
-    A_RENDAH, A_SEDANG, A_TINGGI = iot.AMBANG_METANA
+    # Ambang metana dari modul iot (sumber kebenaran jurnal ilmiah)
+    # Aman < 500 ppm, Waspada 500 - 1000 ppm, Bahaya > 1000 ppm
+    A_AMAN, A_WASPADA = iot.AMBANG_METANA
     WARNA_KELAS = {
-        "rendah": WARNA_RENDAH,
-        "sedang": WARNA_SEDANG,
-        "tinggi": WARNA_ORANYE,
-        "sangat tinggi": WARNA_MERAH,
+        "aman": WARNA_AMAN,
+        "waspada": WARNA_WASPADA,
+        "bahaya": WARNA_BAHAYA,
     }
 
-    # Tombol refresh
-    if st.button("Refresh data sensor", key="refresh_sensor"):
-        ambil_sensor_firebase.clear()
 
     # ----- Pemilihan sumber data -----
     pakai_demo = True
@@ -353,25 +278,32 @@ with tab4:
     log_mentah = pd.DataFrame()
     n_total = 0
 
-    # 1. Coba Firebase
+    # 1. Coba Firebase (prioritaskan path TPA aktif, lalu default)
     if FIREBASE_DATABASE_URL:
-        try:
-            log_firebase = ambil_sensor_firebase(FIREBASE_DATABASE_URL, FIREBASE_SENSOR_PATH)
-            if len(log_firebase) >= MIN_BACAAN:
-                log_mentah = iot.proses_log_dataframe(
-                    log_firebase,
-                    r0_kohm=R0_KOHM_SEMENTARA,
-                    vcc=3.3,
-                    rl_kohm=10.0,
-                )
-                if len(log_mentah) >= MIN_BACAAN:
-                    harian_sensor = iot.ringkas_harian(log_mentah)
-                    harian_sensor["sumber"] = "sensor asli"
-                    sumber_sensor = "Firebase"
-                    n_total = len(log_mentah)
-                    pakai_demo = False
-        except Exception:
-            pass
+        jalur_kandidat = [f"sigap/{nama}/history"]
+        if FIREBASE_SENSOR_PATH not in jalur_kandidat:
+            jalur_kandidat.append(FIREBASE_SENSOR_PATH)
+
+        for jalur in jalur_kandidat:
+            try:
+                log_firebase = ambil_sensor_firebase(FIREBASE_DATABASE_URL, jalur)
+                if len(log_firebase) >= MIN_BACAAN:
+                    log_mentah = iot.proses_log_dataframe(
+                        log_firebase,
+                        r0_kohm=R0_KOHM_SEMENTARA,
+                        vcc=3.3,
+                        rl_kohm=10.0,
+                    )
+                    if len(log_mentah) >= MIN_BACAAN:
+                        harian_sensor = iot.ringkas_harian(log_mentah)
+                        harian_sensor["sumber"] = "sensor asli"
+                        sumber_sensor = f"Firebase ({jalur})"
+                        n_total = len(log_mentah)
+                        pakai_demo = False
+                        break
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning("Gagal memuat Firebase %s: %s", jalur, e)
 
     # 2. Fallback CSV
     if pakai_demo:
@@ -399,14 +331,31 @@ with tab4:
         sumber_sensor = "Demo Sarimukti"
         n_total = 0
 
+    # ----- A. Banner status data -----
+    if pakai_demo:
+        st.warning(
+            "**DATA CONTOH**\n\n"
+            "Data ini diduplikasi dari data cuaca TPA Sarimukti. "
+            "Menunggu data sensor MQ-4 dan DHT22 sungguhan dari prototipe di lapangan.",
+            icon="⚠️",
+        )
+
     if harian_sensor.empty:
         st.info("Belum ada data sensor yang dapat ditampilkan.")
     else:
         # ----- B. Tiga kartu ringkas -----
         baris_terakhir = harian_sensor.iloc[-1]
         suhu_terkini = baris_terakhir.get("suhu_rata", float("nan"))
+        suhu_min_terkini = baris_terakhir.get("suhu_min", suhu_terkini)
+        suhu_maks_terkini = baris_terakhir.get("suhu_maks", suhu_terkini)
+
         rh_terkini = baris_terakhir.get("kelembapan_rata", float("nan"))
+        rh_min_terkini = baris_terakhir.get("kelembapan_min", rh_terkini)
+        rh_maks_terkini = baris_terakhir.get("kelembapan_maks", rh_terkini)
+
         metana_terkini = baris_terakhir.get("metana_rata_ppm", float("nan"))
+        metana_min_terkini = baris_terakhir.get("metana_min_ppm", 0.0)
+        metana_maks_terkini = baris_terakhir.get("metana_maks_ppm", metana_terkini)
         kelas_terkini = str(baris_terakhir.get("metana_kelas", ""))
 
         warna_metana = WARNA_KELAS.get(kelas_terkini, TINTA_2)
@@ -414,16 +363,19 @@ with tab4:
         c1, c2, c3 = st.columns(3)
         with c1:
             st.metric("Suhu rata-rata terbaru", f"{suhu_terkini:.1f} °C")
+            st.caption(f"Min: **{suhu_min_terkini:.1f} °C** — Maks: **{suhu_maks_terkini:.1f} °C**")
         with c2:
             st.metric("Kelembapan rata-rata terbaru", f"{rh_terkini:.1f} %")
+            st.caption(f"Min: **{rh_min_terkini:.1f} %** — Maks: **{rh_maks_terkini:.1f} %**")
         with c3:
             st.markdown(
-                f'<div style="font-size:14px;color:{TINTA_2};margin-bottom:4px;">Metana</div>'
+                f'<div style="font-size:14px;color:{TINTA_2};margin-bottom:4px;">Metana (Rata-rata)</div>'
                 f'<div style="font-size:28px;font-weight:600;color:{TINTA};">{metana_terkini:,.0f} ppm</div>'
                 f'<div style="font-size:16px;font-weight:600;color:{warna_metana};'
                 f'text-transform:uppercase;margin-top:4px;">{kelas_terkini}</div>',
                 unsafe_allow_html=True,
             )
+            st.caption(f"Min: **{metana_min_terkini:,.0f} ppm** — Maks: **{metana_maks_terkini:,.0f} ppm**")
 
         st.divider()
 
@@ -444,6 +396,7 @@ with tab4:
                                               titleColor=TINTA)),
                         tooltip=[
                             alt.Tooltip("tanggal:T", title="Tanggal", format="%d %b %Y"),
+                            alt.Tooltip("suhu_min:Q", title="Suhu min (°C)", format=".1f"),
                             alt.Tooltip("suhu_rata:Q", title="Suhu rata-rata (°C)", format=".1f"),
                             alt.Tooltip("suhu_maks:Q", title="Suhu maks (°C)", format=".1f"),
                         ],
@@ -467,7 +420,9 @@ with tab4:
                                               titleColor=TINTA)),
                         tooltip=[
                             alt.Tooltip("tanggal:T", title="Tanggal", format="%d %b %Y"),
-                            alt.Tooltip("kelembapan_rata:Q", title="Kelembapan (%)", format=".1f"),
+                            alt.Tooltip("kelembapan_min:Q", title="Kelembapan min (%)", format=".1f"),
+                            alt.Tooltip("kelembapan_rata:Q", title="Kelembapan rata-rata (%)", format=".1f"),
+                            alt.Tooltip("kelembapan_maks:Q", title="Kelembapan maks (%)", format=".1f"),
                         ],
                     )
                     .properties(height=260, title="Kelembapan rata-rata harian")
@@ -481,13 +436,13 @@ with tab4:
         st.markdown("**Konsentrasi metana harian**")
 
         if "tanggal" in harian_sensor.columns and "metana_rata_ppm" in harian_sensor.columns:
-            # Pita ambang latar
-            maks_ppm = max(harian_sensor["metana_rata_ppm"].max() * 1.2, A_TINGGI * 1.3)
+            # Pita ambang latar berdasarkan jurnal ilmiah
+            maks_ppm = min(max(harian_sensor["metana_rata_ppm"].max() * 1.2, A_WASPADA * 1.5), 20_000)
             pita_metana = pd.DataFrame({
-                "y0": [0, A_RENDAH, A_SEDANG, A_TINGGI],
-                "y1": [A_RENDAH, A_SEDANG, A_TINGGI, maks_ppm],
-                "kelas": ["Rendah", "Sedang", "Tinggi", "Sangat tinggi"],
-                "warna": [WARNA_RENDAH, WARNA_SEDANG, WARNA_ORANYE, WARNA_MERAH],
+                "y0": [0, A_AMAN, A_WASPADA],
+                "y1": [A_AMAN, A_WASPADA, maks_ppm],
+                "kelas": ["Aman", "Waspada", "Bahaya"],
+                "warna": [WARNA_AMAN, WARNA_WASPADA, WARNA_BAHAYA],
             })
 
             lapis_pita = (
@@ -525,9 +480,10 @@ with tab4:
                                           titleColor=TINTA)),
                     tooltip=[
                         alt.Tooltip("tanggal:T", title="Tanggal", format="%d %b %Y"),
+                        alt.Tooltip("metana_min_ppm:Q", title="Metana min (ppm)", format=",.0f"),
                         alt.Tooltip("metana_rata_ppm:Q", title="Metana rata-rata (ppm)", format=",.0f"),
                         alt.Tooltip("metana_maks_ppm:Q", title="Metana maks (ppm)", format=",.0f"),
-                        alt.Tooltip("metana_kelas:N", title="Kelas"),
+                        alt.Tooltip("metana_kelas:N", title="Status"),
                     ],
                 )
             )
@@ -540,40 +496,123 @@ with tab4:
             st.altair_chart(grafik_ch4, use_container_width=True, key="grafik_metana_iot")
 
             st.caption(
-                "Pita warna di latar menunjukkan klasifikasi konsentrasi metana. "
-                "Ambang: Rendah < {:,} ppm, Sedang {:,} - < {:,} ppm, "
-                "Tinggi {:,} - < {:,} ppm, Sangat tinggi >= {:,} ppm.".format(
-                    A_RENDAH, A_RENDAH, A_SEDANG, A_SEDANG, A_TINGGI, A_TINGGI
+                "Pita warna di latar menunjukkan indikator konsentrasi gas metana (MQ-4) berdasarkan jurnal ilmiah: "
+                "**Aman** < {:,} ppm, **Waspada** {:,} - {:,} ppm, "
+                "**Bahaya** > {:,} ppm (berisiko kebakaran dalam 8 jam).".format(
+                    A_AMAN, A_AMAN, A_WASPADA, A_WASPADA
                 )
             )
 
         st.divider()
 
-         # ----- E. Tabel 7 hari terakhir -----
+        # ----- E. Tabel 7 hari terakhir -----
         st.markdown("**Data 7 hari terakhir**")
-        
         tujuh_hari = harian_sensor.sort_values("tanggal", ascending=False).head(7).copy()
-        
-        # Format kolom langsung dalam ekspresi datar (Semua diawali 8 spasi dari kiri)
-        tujuh_hari["Tanggal"] = tujuh_hari["tanggal"].dt.strftime("%d-%m-%Y")
-        tujuh_hari["Suhu rata-rata (°C)"] = tujuh_hari["suhu_rata"].map("{:.1f}".format)
-        tujuh_hari["Suhu maksimum (°C)"] = tujuh_hari["suhu_maks"].map("{:.1f}".format)
-        tujuh_hari["Kelembapan rata-rata (%)"] = tujuh_hari["kelembapan_rata"].map("{:.1f}".format)
-        tujuh_hari["Metana rata-rata (ppm)"] = tujuh_hari["metana_rata_ppm"].round(0).astype(int)
-        tujuh_hari["Metana maksimum (ppm)"] = tujuh_hari["metana_maks_ppm"].round(0).astype(int)
-        tujuh_hari["Jumlah pembacaan"] = tujuh_hari["n_bacaan"].astype(int)
-        tujuh_hari["Status metana"] = tujuh_hari["metana_kelas"].str.capitalize()
-        
-        kolom_pilihan = [
-            "Tanggal", "Suhu rata-rata (°C)", "Suhu maksimum (°C)", 
-            "Kelembapan rata-rata (%)", "Metana rata-rata (ppm)", 
-            "Metana maksimum (ppm)", "Jumlah pembacaan", "Status metana"
-        ]
-        
-        # Tampilkan langsung ke Streamlit secara aman
-        st.dataframe(tujuh_hari[kolom_pilihan], hide_index=True, use_container_width=True)
+
+        def _ambil_kolom(df, col, default_val=0.0):
+            return df[col] if col in df.columns else default_val
+
+        tabel = pd.DataFrame({
+            "Tanggal": tujuh_hari["tanggal"].dt.strftime("%d-%m-%Y"),
+            "Suhu min (°C)": _ambil_kolom(tujuh_hari, "suhu_min", tujuh_hari["suhu_rata"]).round(1),
+            "Suhu rata-rata (°C)": tujuh_hari["suhu_rata"].round(1),
+            "Suhu maksimum (°C)": tujuh_hari["suhu_maks"].round(1),
+            "Kelembapan min (%)": _ambil_kolom(tujuh_hari, "kelembapan_min", tujuh_hari["kelembapan_rata"]).round(1),
+            "Kelembapan rata-rata (%)": tujuh_hari["kelembapan_rata"].round(1),
+            "Kelembapan maksimum (%)": _ambil_kolom(tujuh_hari, "kelembapan_maks", tujuh_hari["kelembapan_rata"]).round(1),
+            "Metana min (ppm)": _ambil_kolom(tujuh_hari, "metana_min_ppm", 0.0).round(0).astype(int),
+            "Metana rata-rata (ppm)": tujuh_hari["metana_rata_ppm"].round(0).astype(int),
+            "Metana maksimum (ppm)": tujuh_hari["metana_maks_ppm"].round(0).astype(int),
+            "Jumlah pembacaan": tujuh_hari["n_bacaan"].astype(int),
+            "Status metana": tujuh_hari["metana_kelas"].str.capitalize(),
+        }).reset_index(drop=True)
+
+        # Warnai status metana
+        kelas_list = tujuh_hari["metana_kelas"].tolist()
+
+        def warnai_metana(kolom):
+            return [
+                f"color: {WARNA_KELAS.get(k, TINTA_2)}; font-weight: 600"
+                for k in kelas_list
+            ]
+
+        gaya_tabel = tabel.style.apply(warnai_metana, subset=["Status metana"])
+        st.dataframe(gaya_tabel, hide_index=True, use_container_width=True,
+                     height=38 + 35 * len(tabel))
 
         st.divider()
-# Perbaikan spasi paksa v2
 
-# Perbaikan spasi paksa v2
+        # ----- F. Panel perbandingan dengan model IRKT -----
+        st.markdown("**Perbandingan data sensor dengan model IRKT**")
+
+        perbandingan = iot.bandingkan_dengan_model(harian_sensor, d)
+
+        if perbandingan.empty:
+            st.info("Belum terdapat tanggal yang sama antara data sensor dan periode model.")
+        else:
+            # Normalisasi suhu sensor: anomali terhadap rata-rata periode
+            rata_suhu = perbandingan["suhu_rata"].mean()
+            perbandingan["suhu_anomali"] = perbandingan["suhu_rata"] - rata_suhu
+
+            # Normalisasi z_prediksi ke skala serupa untuk perbandingan visual
+            rata_z = perbandingan["z_prediksi"].mean()
+            std_z = perbandingan["z_prediksi"].std()
+            std_suhu = perbandingan["suhu_anomali"].std()
+
+            if std_z > 0 and std_suhu > 0:
+                perbandingan["z_pred_norm"] = (
+                    (perbandingan["z_prediksi"] - rata_z) / std_z * std_suhu
+                )
+            else:
+                perbandingan["z_pred_norm"] = perbandingan["z_prediksi"] - rata_z
+
+            # Siapkan data untuk grafik
+            df_vis = perbandingan[["tanggal", "suhu_anomali", "z_pred_norm"]].melt(
+                id_vars="tanggal",
+                var_name="seri",
+                value_name="nilai",
+            )
+            df_vis["Seri"] = df_vis["seri"].map({
+                "suhu_anomali": "Anomali suhu sensor (°C)",
+                "z_pred_norm": "z prediksi model (dinormalisasi)",
+            })
+
+            grafik_banding = (
+                alt.Chart(df_vis)
+                .mark_line(strokeWidth=2)
+                .encode(
+                    x=alt.X("tanggal:T", title=None,
+                            axis=alt.Axis(labelAngle=0, grid=False, labelColor=TINTA_2)),
+                    y=alt.Y("nilai:Q", title="Nilai (dinormalisasi)",
+                            axis=alt.Axis(gridColor="#EEF2F6", labelColor=TINTA_2,
+                                          titleColor=TINTA)),
+                    color=alt.Color("Seri:N",
+                                    scale=alt.Scale(
+                                        domain=["Anomali suhu sensor (°C)",
+                                                "z prediksi model (dinormalisasi)"],
+                                        range=["#1B4965", "#9C6ADE"]),
+                                    legend=alt.Legend(orient="bottom", title=None,
+                                                      labelFontSize=13)),
+                    tooltip=[
+                        alt.Tooltip("tanggal:T", title="Tanggal", format="%d %b %Y"),
+                        alt.Tooltip("Seri:N", title="Seri"),
+                        alt.Tooltip("nilai:Q", title="Nilai", format=".2f"),
+                    ],
+                )
+                .properties(height=300)
+                .configure_view(stroke=None)
+            )
+            st.altair_chart(grafik_banding, use_container_width=True,
+                            key="grafik_banding_sensor_model")
+
+            st.caption(
+                "Grafik ini digunakan untuk melihat pola pergerakan data sensor dan prediksi "
+                "model pada tanggal yang sama. Kesamaan arah tidak berarti sensor menjadi "
+                "variabel langsung dalam perhitungan IRKT."
+            )
+
+
+with tab4:
+    render_sensor_iot(nama, fitur, d)
+
+
