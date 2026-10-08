@@ -2,7 +2,7 @@
 import datetime as dt
 import pandas as pd, streamlit as st
 from sigap.config import TPA, AKSI
-from sigap import weather, satellite, index as idx
+from sigap import weather, satellite, index as idx, sensor
 from sigap.model import ModelTimbunan
 from sigap.alert import pesan
 import ui_components as ui
@@ -46,6 +46,7 @@ hari_ini = pd.Timestamp.today().normalize()
 with st.sidebar:
     st.markdown("### Pengaturan")
     nama = st.selectbox("Pilih TPA", list(TPA))
+    data_sensor = sensor.ambil_sensor_terbaru()
     hari_riwayat = st.slider("Panjang riwayat pada grafik (hari)", 30, 365, 90, 30)
     info = TPA[nama]
     st.divider()
@@ -53,7 +54,36 @@ with st.sidebar:
                 f"Koordinat: {info['lat']:.4f}, {info['lon']:.4f}")
 
 ui.header(hari_ini)
+st.markdown("### Pemantauan Sensor Lapangan")
 
+if data_sensor is None:
+    st.warning("Data sensor belum tersedia.")
+else:
+    c1, c2, c3, c4 = st.columns(4)
+
+    with c1:
+        st.metric(
+            "Metana",
+            f"{data_sensor['methane_ppm']:.2f} ppm"
+        )
+
+    with c2:
+        st.metric(
+            "Kategori",
+            data_sensor["kategori_metana"]
+        )
+
+    with c3:
+        st.metric(
+            "Suhu",
+            f"{data_sensor['suhu']:.1f} °C"
+        )
+
+    with c4:
+        st.metric(
+            "Kelembapan",
+            f"{data_sensor['rh']:.1f} %"
+        )
 try:
     d, ambang, landsat, modis, waktu = siapkan(nama)
 except CuacaGagal as e:
@@ -95,6 +125,80 @@ if landsat is None:
                "satelit belum memakai pengamatan langsung. Potensi kebakaran tetap dapat dibaca, namun kurang peka.")
 
 ui.kartu_status(kini, ambang, depan, nama, info["wilayah"], AKSI[kini.level])
+st.markdown("### Indikator Lapangan Pendukung")
+st.markdown("### Interpretasi IRKT dan Indikator Lapangan")
+
+if data_sensor is not None:
+    irkt_level = str(kini.level)
+    metana_level = str(data_sensor["kategori_metana"])
+
+    if irkt_level == "HIJAU":
+        interpretasi = (
+            "Status IRKT berada pada tingkat HIJAU. "
+            "Indikator metana lapangan ditampilkan sebagai informasi "
+            "pendukung kondisi aktual saat pengukuran."
+        )
+
+    elif irkt_level == "KUNING":
+        interpretasi = (
+            "Status IRKT berada pada tingkat KUNING. "
+            "Indikator metana digunakan sebagai informasi tambahan "
+            "untuk membantu melihat kondisi lapangan saat pengukuran."
+        )
+
+    elif irkt_level == "ORANYE":
+        interpretasi = (
+            "Status IRKT berada pada tingkat ORANYE. "
+            "Indikator metana memberikan informasi kondisi lapangan "
+            "yang dapat dipertimbangkan bersama hasil model."
+        )
+
+    elif irkt_level == "MERAH":
+        interpretasi = (
+            "Status IRKT berada pada tingkat MERAH. "
+            "Indikator metana tetap digunakan sebagai informasi kondisi "
+            "lapangan dan tidak menggantikan hasil penilaian IRKT."
+        )
+
+    else:
+        interpretasi = (
+            "Status IRKT dan indikator metana ditampilkan sebagai "
+            "dua informasi pendukung yang dibaca secara bersamaan."
+        )
+
+    st.info(
+        f"**IRKT:** {irkt_level}  |  "
+        f"**Metana:** {metana_level}\n\n"
+        f"{interpretasi}"
+    )
+else:
+    st.warning("Interpretasi belum tersedia karena data sensor belum tersedia.")
+
+if data_sensor is not None:
+    st.info(
+        f"Sensor MQ-4 mencatat konsentrasi metana "
+        f"**{data_sensor['methane_ppm']:.2f} ppm** "
+        f"dengan kategori **{data_sensor['kategori_metana']}**. "
+        f"Data ini digunakan sebagai informasi kondisi lapangan "
+        f"pendukung pembacaan tingkat risiko kebakaran TPA."
+    )
+else:
+    st.warning("Data sensor lapangan belum tersedia.")
+if data_sensor is not None:
+    st.markdown("**Perbandingan dengan tingkat risiko IRKT**")
+
+    irkt_level = str(kini.level)
+    metana_level = data_sensor["kategori_metana"]
+
+    st.write(
+        f"**IRKT:** {irkt_level}  |  "
+        f"**Metana lapangan:** {metana_level}"
+    )
+
+    st.caption(
+        "Perbandingan ini bersifat informatif. Data metana tidak "
+        "mengubah nilai atau tingkat IRKT."
+    )
 ui.linimasa_15_hari(depan, hari_ini, ambang, ui.kalimat_kesimpulan(kini, depan, hari_ini))
 
 tab1, tab2, tab3 = st.tabs(["Prakiraan", "Komponen indeks", "Zonasi dalam TPA"])
