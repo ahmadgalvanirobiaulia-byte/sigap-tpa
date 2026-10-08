@@ -161,27 +161,16 @@ if data_sensor is None:
     st.warning("Data sensor belum tersedia.")
 else:
     c1, c2, c3, c4 = st.columns(4)
+    
+    # Ambil teks kategori dan bersihkan dari buntut kalimat panjang
+    kat_bersih = str(data_sensor["kategori_metana"]).split(" - ")[0]
+    
+    # Tampilkan masing-masing metrik secara sejajar dan presisi
+    c1.metric("Metana", f"{data_sensor['methane_ppm']:.0f} ppm")
+    c2.metric("Kategori", kat_bersih)
+    c3.metric("Suhu", f"{data_sensor['suhu']:.1f} °C")
+    c4.metric("Kelembapan", f"{data_sensor['rh']:.1f} %")
 
-    with c1:
-        st.metric(
-            "Metana",
-            f"{data_sensor['methane_ppm']:.0f} ppm"
-        )
-
-        with c2:
-        st.metric("Kategori", str(data_sensor["kategori_metana"]).split(" - ")[0])
-            
-    with c3:
-        st.metric(
-            "Suhu",
-            f"{data_sensor['suhu']:.1f} °C"
-        )
-
-    with c4:
-        st.metric(
-            "Kelembapan",
-            f"{data_sensor['rh']:.1f} %"
-        )
 try:
     d, ambang, landsat, modis, waktu, fitur = siapkan(nama)
 except CuacaGagal as e:
